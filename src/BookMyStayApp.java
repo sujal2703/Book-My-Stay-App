@@ -1,62 +1,54 @@
+import java.io.*;
 import java.util.*;
 
 /**
- * Use Case 11: Concurrent Booking Simulation (Thread Safety)
- * Demonstrates the use of synchronization to prevent race conditions.
+ * Use Case 12: Data Persistence & System Recovery
+ * Demonstrates saving and loading system state using Serialization.
  * * @author sujal2703
- * @version 11.0
+ * @version 12.0
  */
 
-// --- Shared Inventory Resource ---
-class ThreadSafeInventory {
-    private final Map<String, Integer> inventory = new HashMap<>();
+// --- Persistent State Wrapper ---
+// Must implement Serializable to be saved to a file
+class SystemState implements Serializable {
+    private static final long serialVersionUID = 1L;
+    public Map<String, Integer> inventory;
+    public List<String> bookingHistory;
 
-    public void addRoomType(String type, int count) {
-        inventory.put(type, count);
-    }
-
-    /**
-     * synchronized ensures that if two threads try to book the last room,
-     * one will wait until the other finished the check-and-decrement cycle.
-     */
-    public synchronized boolean bookRoom(String type) {
-        int available = inventory.getOrDefault(type, 0);
-        if (available > 0) {
-            // Simulate processing time to increase the chance of a race condition
-            try { Thread.sleep(10); } catch (InterruptedException e) {}
-
-            inventory.put(type, available - 1);
-            return true;
-        }
-        return false;
-    }
-
-    public synchronized int getCount(String type) {
-        return inventory.getOrDefault(type, 0);
+    public SystemState(Map<String, Integer> inventory, List<String> bookingHistory) {
+        this.inventory = inventory;
+        this.bookingHistory = bookingHistory;
     }
 }
 
-// --- Booking Task (Runnable) ---
-class BookingTask implements Runnable {
-    private String guestName;
-    private String roomType;
-    private ThreadSafeInventory inventory;
+// --- Persistence Service ---
+class PersistenceService {
+    private static final String FILE_NAME = "hotel_state.ser";
 
-    public BookingTask(String guestName, String roomType, ThreadSafeInventory inventory) {
-        this.guestName = guestName;
-        this.roomType = roomType;
-        this.inventory = inventory;
+    public static void saveState(Map<String, Integer> inv, List<String> history) {
+        try (ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(FILE_NAME))) {
+            SystemState state = new SystemState(inv, history);
+            oos.writeObject(state);
+            System.out.println("[Persistence] State saved successfully to " + FILE_NAME);
+        } catch (IOException e) {
+            System.err.println("[Error] Failed to save state: " + e.getMessage());
+        }
     }
 
-    @Override
-    public void run() {
-        System.out.println("[Thread " + Thread.currentThread().getId() + "] " +
-                guestName + " is attempting to book " + roomType);
+    public static SystemState loadState() {
+        File file = new File(FILE_NAME);
+        if (!file.exists()) {
+            System.out.println("[Persistence] No existing state found. Starting fresh.");
+            return null;
+        }
 
-        if (inventory.bookRoom(roomType)) {
-            System.out.println(" >> SUCCESS: Room allocated to " + guestName);
-        } else {
-            System.out.println(" >> FAILED: No availability for " + guestName);
+        try (ObjectInputStream ois = new ObjectInputStream(new FileInputStream(FILE_NAME))) {
+            SystemState state = (SystemState) ois.readObject();
+            System.out.println("[Persistence] State recovered successfully from " + FILE_NAME);
+            return state;
+        } catch (IOException | ClassNotFoundException e) {
+            System.err.println("[Error] Recovery failed: " + e.getMessage());
+            return null;
         }
     }
 }
@@ -64,40 +56,45 @@ class BookingTask implements Runnable {
 // --- Main Application ---
 public class BookMyStayApp {
 
-    public static void main(String[] args) throws InterruptedException {
+    public static void main(String[] args) {
         System.out.println("******************************************");
-        System.out.println("   Book My Stay App - Concurrent Simulation");
+        System.out.println("   Book My Stay App - Persistence & Recovery");
         System.out.println("******************************************\n");
 
-        // 1. Setup Shared Inventory (Only 2 rooms available)
-        ThreadSafeInventory sharedInventory = new ThreadSafeInventory();
-        sharedInventory.addRoomType("Suite", 2);
+        // 1. Recovery Phase: Try to load existing data
+        SystemState recovered = PersistenceService.loadState();
 
-        // 2. Create multiple threads (5 guests competing for 2 rooms)
-        Thread t1 = new Thread(new BookingTask("Sujal", "Suite", sharedInventory));
-        Thread t2 = new Thread(new BookingTask("Amit", "Suite", sharedInventory));
-        Thread t3 = new Thread(new BookingTask("John", "Suite", sharedInventory));
-        Thread t4 = new Thread(new BookingTask("Jane", "Suite", sharedInventory));
-        Thread t5 = new Thread(new BookingTask("Alice", "Suite", sharedInventory));
+        Map<String, Integer> inventory;
+        List<String> history;
 
-        // 3. Start all threads simultaneously
-        t1.start();
-        t2.start();
-        t3.start();
-        t4.start();
-        t5.start();
+        if (recovered != null) {
+            inventory = recovered.inventory;
+            history = recovered.bookingHistory;
+        } else {
+            // Initial Setup if no file exists
+            inventory = new HashMap<>();
+            inventory.put("Single", 10);
+            inventory.put("Suite", 5);
+            history = new ArrayList<>();
+        }
 
-        // 4. Wait for all threads to finish
-        t1.join();
-        t2.join();
-        t3.join();
-        t4.join();
-        t5.join();
+        // 2. Display Current State (Recovered or Fresh)
+        System.out.println("Current Inventory: " + inventory);
+        System.out.println("History Count: " + history.size());
 
-        // 5. Final Consistency Check
+        // 3. Simulate System Activity
+        System.out.println("\n[Action] Processing a new booking for 'Sujal'...");
+        if (inventory.get("Single") > 0) {
+            inventory.put("Single", inventory.get("Single") - 1);
+            history.add("Booking-ID-" + (history.size() + 101) + ": Sujal (Single)");
+        }
+
+        // 4. Persistence Phase: Save state before shutdown
+        System.out.println("\n[Action] Shutting down. Saving state...");
+        PersistenceService.saveState(inventory, history);
+
         System.out.println("\n------------------------------------------");
-        System.out.println("Final Suite Inventory: " + sharedInventory.getCount("Suite"));
-        System.out.println("Status: Multi-threaded consistency maintained.");
+        System.out.println("Status: System state persisted. Try running the app again!");
         System.out.println("******************************************");
     }
 }
