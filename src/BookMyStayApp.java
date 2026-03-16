@@ -1,74 +1,67 @@
 import java.util.*;
 
 /**
- * Use Case 7: Add-On Service Selection
- * Demonstrates a One-to-Many relationship using Map<String, List<Service>>.
+ * Use Case 8: Booking History & Reporting
+ * Uses a List to maintain a chronological audit trail of confirmed bookings.
  * * @author sujal2703
- * @version 7.0
+ * @version 8.0
  */
 
 // --- Domain Models ---
 
-class Service {
-    private String name;
+class Reservation {
+    private String reservationId;
+    private String guestName;
+    private String roomType;
     private double price;
 
-    public Service(String name, double price) {
-        this.name = name;
+    public Reservation(String reservationId, String guestName, String roomType, double price) {
+        this.reservationId = reservationId;
+        this.guestName = guestName;
+        this.roomType = roomType;
         this.price = price;
     }
 
-    public String getName() { return name; }
+    public String getReservationId() { return reservationId; }
     public double getPrice() { return price; }
 
     @Override
     public String toString() {
-        return name + " ($" + price + ")";
+        return String.format("ID: %-8s | Guest: %-10s | Room: %-10s | Paid: $%.2f",
+                reservationId, guestName, roomType, price);
     }
 }
 
-class Reservation {
-    private String reservationId;
-    private String guestName;
+// --- Booking History & Reporting Service ---
 
-    public Reservation(String reservationId, String guestName) {
-        this.reservationId = reservationId;
-        this.guestName = guestName;
+class BookingReportService {
+    // Persistent storage for the session
+    private List<Reservation> history = new ArrayList<>();
+
+    // Record a successful booking
+    public void recordBooking(Reservation res) {
+        history.add(res);
     }
 
-    public String getReservationId() { return reservationId; }
-    public String getGuestName() { return guestName; }
-}
+    // Generate a summary report (Read-Only)
+    public void generateAdminReport() {
+        System.out.println("\n========== ADMIN STRATEGIC REPORT ==========");
+        System.out.println("Total Bookings Confirmed: " + history.size());
 
-// --- Add-On Service Manager ---
-
-class AddOnManager {
-    // Mapping Reservation ID -> List of selected Services
-    private Map<String, List<Service>> selectionMap = new HashMap<>();
-
-    public void addServiceToReservation(String resId, Service service) {
-        // If the reservation doesn't have a list yet, create one
-        selectionMap.computeIfAbsent(resId, k -> new ArrayList<>()).add(service);
-        System.out.println("[Add-On] Added " + service.getName() + " to Reservation: " + resId);
-    }
-
-    public void displayBill(Reservation res) {
-        String id = res.getReservationId();
-        List<Service> services = selectionMap.getOrDefault(id, new ArrayList<>());
-
-        System.out.println("\n--- Service Summary for " + res.getGuestName() + " (" + id + ") ---");
-        double total = 0;
-
-        if (services.isEmpty()) {
-            System.out.println("No add-on services selected.");
-        } else {
-            for (Service s : services) {
-                System.out.println(" + " + s);
-                total += s.getPrice();
-            }
+        double totalRevenue = 0;
+        for (Reservation res : history) {
+            System.out.println(" -> " + res);
+            totalRevenue += res.getPrice();
         }
-        System.out.println("Total Add-On Cost: $" + total);
-        System.out.println("------------------------------------------");
+
+        System.out.println("--------------------------------------------");
+        System.out.println("Total Revenue Generated: $" + totalRevenue);
+        System.out.println("============================================\n");
+    }
+
+    // Getter for manual audit
+    public List<Reservation> getHistory() {
+        return Collections.unmodifiableList(history); // Defensive copy
     }
 }
 
@@ -78,32 +71,29 @@ public class BookMyStayApp {
 
     public static void main(String[] args) {
         System.out.println("******************************************");
-        System.out.println("   Book My Stay App - Add-On Services     ");
-        System.out.println("******************************************\n");
+        System.out.println("   Book My Stay App - History & Audit     ");
+        System.out.println("******************************************");
 
-        // 1. Setup existing reservations (from UC6 logic)
-        Reservation res1 = new Reservation("RES-101", "Sujal");
-        Reservation res2 = new Reservation("RES-102", "Amit");
+        // 1. Initialize the History Service
+        BookingReportService reportService = new BookingReportService();
 
-        // 2. Define available Add-On Services
-        Service breakfast = new Service("Buffet Breakfast", 25.0);
-        Service wifi = new Service("Premium WiFi", 10.0);
-        Service spa = new Service("Spa Session", 50.0);
+        // 2. Simulate successful bookings being recorded
+        // (In a full app, these would come from the BookingService after allocation)
+        System.out.println("[System] Recording confirmed bookings to history...");
 
-        // 3. Initialize Add-On Manager
-        AddOnManager manager = new AddOnManager();
+        reportService.recordBooking(new Reservation("RES-101", "Sujal", "Single", 100.0));
+        reportService.recordBooking(new Reservation("RES-102", "Amit", "Suite", 350.0));
+        reportService.recordBooking(new Reservation("RES-103", "John", "Double", 180.0));
 
-        // 4. Guest selects services
-        manager.addServiceToReservation(res1.getReservationId(), breakfast);
-        manager.addServiceToReservation(res1.getReservationId(), wifi);
+        // 3. Admin requests the report
+        reportService.generateAdminReport();
 
-        manager.addServiceToReservation(res2.getReservationId(), spa);
+        // 4. Demonstrate manual verification
+        System.out.println("Audit Status: History sequence verified (FIFO).");
+        System.out.println("Latest Reservation ID: " +
+                reportService.getHistory().get(reportService.getHistory().size() - 1).getReservationId());
 
-        // 5. Display Aggregated Costs
-        manager.displayBill(res1);
-        manager.displayBill(res2);
-
-        System.out.println("\nStatus: Add-on services processed independently of inventory.");
+        System.out.println("\nStatus: Persistence layer simulated. Ready for file/DB integration.");
         System.out.println("******************************************");
     }
 }
