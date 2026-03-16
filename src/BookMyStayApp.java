@@ -1,85 +1,26 @@
-import java.util.HashMap;
-import java.util.Map;
+import java.util.LinkedList;
+import java.util.Queue;
 
 /**
- * UseCase4RoomSearch: Implements a read-only search service.
- * Filters out rooms with zero availability and prevents state mutation.
+ * Use Case 5: Booking Request (First-Come-First-Served)
+ * Demonstrates the use of a Queue to manage incoming requests fairly.
  * * @author sujal2703
- * @version 4.0
+ * @version 5.0
  */
 
-// --- Domain Model ---
-abstract class Room {
+// --- Domain Model: Reservation ---
+class Reservation {
+    private String guestName;
     private String roomType;
-    private double price;
 
-    public Room(String roomType, double price) {
+    public Reservation(String guestName, String roomType) {
+        this.guestName = guestName;
         this.roomType = roomType;
-        this.price = price;
     }
 
-    public String getRoomType() { return roomType; }
-    public double getPrice() { return price; }
-}
-
-class SingleRoom extends Room { public SingleRoom() { super("Single", 100.0); } }
-class DoubleRoom extends Room { public DoubleRoom() { super("Double", 180.0); } }
-class SuiteRoom extends Room { public SuiteRoom() { super("Suite", 350.0); } }
-
-// --- Inventory (State Holder) ---
-class RoomInventory {
-    private Map<String, Integer> inventory = new HashMap<>();
-
-    public void addRoomType(String type, int count) {
-        inventory.put(type, count);
-    }
-
-    public int getAvailableCount(String type) {
-        return inventory.getOrDefault(type, 0);
-    }
-
-    public Map<String, Integer> getAllInventory() {
-        return new HashMap<>(inventory); // Return copy to protect original state
-    }
-}
-
-// --- Search Service (Read-Only Logic) ---
-class SearchService {
-    private RoomInventory inventory;
-    private Map<String, Room> roomDetails;
-
-    public SearchService(RoomInventory inventory) {
-        this.inventory = inventory;
-        this.roomDetails = new HashMap<>();
-        // Pre-populate room details for display
-        roomDetails.put("Single", new SingleRoom());
-        roomDetails.put("Double", new DoubleRoom());
-        roomDetails.put("Suite", new SuiteRoom());
-    }
-
-    public void searchAvailableRooms() {
-        System.out.println("Searching for available rooms...");
-        System.out.println("------------------------------------------");
-        boolean found = false;
-
-        for (Map.Entry<String, Integer> entry : inventory.getAllInventory().entrySet()) {
-            String type = entry.getKey();
-            int count = entry.getValue();
-
-            // Validation Logic: Only show rooms with availability > 0
-            if (count > 0) {
-                Room details = roomDetails.get(type);
-                System.out.println("Room Type: " + String.format("%-10s", type) +
-                        " | Price: $" + String.format("%-6s", details.getPrice()) +
-                        " | Available: " + count);
-                found = true;
-            }
-        }
-
-        if (!found) {
-            System.out.println("No rooms currently available.");
-        }
-        System.out.println("------------------------------------------");
+    @Override
+    public String toString() {
+        return "Guest: " + String.format("%-10s", guestName) + " | Requested: " + roomType;
     }
 }
 
@@ -87,24 +28,43 @@ class SearchService {
 public class BookMyStayApp {
 
     public static void main(String[] args) {
-        System.out.println("Book My Stay App - Version 4.0 (Search Service)");
-        System.out.println("==========================================");
+        System.out.println("******************************************");
+        System.out.println("   Book My Stay App - Use Case 5          ");
+        System.out.println("   (First-Come-First-Served Queue)        ");
+        System.out.println("******************************************\n");
 
-        // 1. Setup Inventory
-        RoomInventory hotelInventory = new RoomInventory();
-        hotelInventory.addRoomType("Single", 5);
-        hotelInventory.addRoomType("Double", 0); // Out of stock
-        hotelInventory.addRoomType("Suite", 2);
+        // 1. Initialize the Booking Request Queue (FIFO)
+        // LinkedList implements the Queue interface in Java
+        Queue<Reservation> bookingQueue = new LinkedList<>();
 
-        // 2. Initialize Search Service
-        SearchService searchService = new SearchService(hotelInventory);
+        // 2. Guest submits booking requests (Intake phase)
+        System.out.println("[Action] Receiving incoming booking requests...");
 
-        // 3. Perform Search
-        // Notice: Double rooms should NOT appear in the output.
-        searchService.searchAvailableRooms();
+        bookingQueue.add(new Reservation("Sujal", "Suite"));
+        bookingQueue.add(new Reservation("Amit", "Single"));
+        bookingQueue.add(new Reservation("John", "Double"));
+        bookingQueue.add(new Reservation("Jane", "Suite"));
 
-        System.out.println("Search completed successfully.");
-        System.out.println("Note: Inventory state remained unchanged.");
-        System.out.println("==========================================");
+        // 3. Displaying the Queue State
+        // The order should be exactly as they were added.
+        System.out.println("\nCurrent Booking Request Queue:");
+        System.out.println("------------------------------------------");
+
+        if (bookingQueue.isEmpty()) {
+            System.out.println("No pending requests.");
+        } else {
+            // We use a for-each loop to view the queue without removing items (Peek)
+            for (Reservation request : bookingQueue) {
+                System.out.println(" -> " + request);
+            }
+        }
+
+        // 4. Verification of FIFO Principle
+        System.out.println("------------------------------------------");
+        System.out.println("Queue Size: " + bookingQueue.size());
+        System.out.println("Next guest to be served: " + bookingQueue.peek());
+
+        System.out.println("\nStatus: Requests queued fairly. No inventory modified.");
+        System.out.println("******************************************");
     }
 }
