@@ -1,14 +1,13 @@
-import java.util.LinkedList;
-import java.util.Queue;
+import java.util.*;
 
 /**
- * Use Case 5: Booking Request (First-Come-First-Served)
- * Demonstrates the use of a Queue to manage incoming requests fairly.
+ * Use Case 6: Reservation Confirmation & Room Allocation
+ * Focuses on unique Room ID assignment and preventing double-booking using Sets.
  * * @author sujal2703
- * @version 5.0
+ * @version 6.0
  */
 
-// --- Domain Model: Reservation ---
+// --- Domain Models ---
 class Reservation {
     private String guestName;
     private String roomType;
@@ -18,9 +17,57 @@ class Reservation {
         this.roomType = roomType;
     }
 
+    public String getGuestName() { return guestName; }
+    public String getRoomType() { return roomType; }
+
     @Override
     public String toString() {
-        return "Guest: " + String.format("%-10s", guestName) + " | Requested: " + roomType;
+        return "Guest: " + guestName + " | Room: " + roomType;
+    }
+}
+
+// --- Allocation & Inventory Logic ---
+class BookingService {
+    private Map<String, Integer> inventory = new HashMap<>();
+    // Tracks unique Room IDs already assigned: Map<RoomType, Set<RoomIDs>>
+    private Map<String, Set<String>> allocatedRooms = new HashMap<>();
+    private int idCounter = 101; // Simple counter to generate unique Room IDs
+
+    public void setupInventory(String type, int count) {
+        inventory.put(type, count);
+        allocatedRooms.put(type, new HashSet<>());
+    }
+
+    public void processBooking(Reservation request) {
+        String type = request.getRoomType();
+        int available = inventory.getOrDefault(type, 0);
+
+        System.out.println("[Processing] " + request.getGuestName() + " for " + type + "...");
+
+        if (available > 0) {
+            // 1. Generate Unique Room ID (e.g., S-101, D-102)
+            String roomID = type.charAt(0) + "-" + (idCounter++);
+
+            // 2. Uniqueness Enforcement: Add to Set
+            // Set.add() returns false if the ID already exists
+            if (allocatedRooms.get(type).add(roomID)) {
+                // 3. Decrement Inventory immediately
+                inventory.put(type, available - 1);
+
+                System.out.println(" >> SUCCESS: Room " + roomID + " allocated to " + request.getGuestName());
+            } else {
+                System.out.println(" >> ERROR: Collision detected for Room ID " + roomID);
+            }
+        } else {
+            System.out.println(" >> REJECTED: No " + type + " rooms available.");
+        }
+    }
+
+    public void displaySummary() {
+        System.out.println("\n--- Final Allocation Summary ---");
+        allocatedRooms.forEach((type, ids) -> {
+            System.out.println(type + " Allocated: " + ids + " | Remaining: " + inventory.get(type));
+        });
     }
 }
 
@@ -29,42 +76,31 @@ public class BookMyStayApp {
 
     public static void main(String[] args) {
         System.out.println("******************************************");
-        System.out.println("   Book My Stay App - Use Case 5          ");
-        System.out.println("   (First-Come-First-Served Queue)        ");
+        System.out.println("   Book My Stay App - Room Allocation     ");
         System.out.println("******************************************\n");
 
-        // 1. Initialize the Booking Request Queue (FIFO)
-        // LinkedList implements the Queue interface in Java
-        Queue<Reservation> bookingQueue = new LinkedList<>();
+        // 1. Setup Services
+        BookingService service = new BookingService();
+        service.setupInventory("Single", 2);
+        service.setupInventory("Suite", 1);
 
-        // 2. Guest submits booking requests (Intake phase)
-        System.out.println("[Action] Receiving incoming booking requests...");
+        // 2. Setup Request Queue (FIFO from UC5)
+        Queue<Reservation> requestQueue = new LinkedList<>();
+        requestQueue.add(new Reservation("Sujal", "Single"));
+        requestQueue.add(new Reservation("Amit", "Suite"));
+        requestQueue.add(new Reservation("John", "Single"));
+        requestQueue.add(new Reservation("Jane", "Single")); // This should be rejected (only 2 Singles)
 
-        bookingQueue.add(new Reservation("Sujal", "Suite"));
-        bookingQueue.add(new Reservation("Amit", "Single"));
-        bookingQueue.add(new Reservation("John", "Double"));
-        bookingQueue.add(new Reservation("Jane", "Suite"));
-
-        // 3. Displaying the Queue State
-        // The order should be exactly as they were added.
-        System.out.println("\nCurrent Booking Request Queue:");
-        System.out.println("------------------------------------------");
-
-        if (bookingQueue.isEmpty()) {
-            System.out.println("No pending requests.");
-        } else {
-            // We use a for-each loop to view the queue without removing items (Peek)
-            for (Reservation request : bookingQueue) {
-                System.out.println(" -> " + request);
-            }
+        // 3. Dequeue and Process (UC6 Core Logic)
+        while (!requestQueue.isEmpty()) {
+            Reservation nextRequest = requestQueue.poll();
+            service.processBooking(nextRequest);
         }
 
-        // 4. Verification of FIFO Principle
-        System.out.println("------------------------------------------");
-        System.out.println("Queue Size: " + bookingQueue.size());
-        System.out.println("Next guest to be served: " + bookingQueue.peek());
+        // 4. Final Verification
+        service.displaySummary();
 
-        System.out.println("\nStatus: Requests queued fairly. No inventory modified.");
+        System.out.println("\nStatus: All queued requests processed. Consistency maintained.");
         System.out.println("******************************************");
     }
 }
