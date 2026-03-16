@@ -1,67 +1,43 @@
 import java.util.*;
 
 /**
- * Use Case 8: Booking History & Reporting
- * Uses a List to maintain a chronological audit trail of confirmed bookings.
+ * Use Case 9: Error Handling & Validation
+ * Demonstrates custom exceptions, fail-fast validation, and state guarding.
  * * @author sujal2703
- * @version 8.0
+ * @version 9.0
  */
 
-// --- Domain Models ---
+// --- Custom Exceptions ---
 
-class Reservation {
-    private String reservationId;
-    private String guestName;
-    private String roomType;
-    private double price;
-
-    public Reservation(String reservationId, String guestName, String roomType, double price) {
-        this.reservationId = reservationId;
-        this.guestName = guestName;
-        this.roomType = roomType;
-        this.price = price;
-    }
-
-    public String getReservationId() { return reservationId; }
-    public double getPrice() { return price; }
-
-    @Override
-    public String toString() {
-        return String.format("ID: %-8s | Guest: %-10s | Room: %-10s | Paid: $%.2f",
-                reservationId, guestName, roomType, price);
+class InvalidBookingException extends Exception {
+    public InvalidBookingException(String message) {
+        super(message);
     }
 }
 
-// --- Booking History & Reporting Service ---
-
-class BookingReportService {
-    // Persistent storage for the session
-    private List<Reservation> history = new ArrayList<>();
-
-    // Record a successful booking
-    public void recordBooking(Reservation res) {
-        history.add(res);
+class RoomNotAvailableException extends Exception {
+    public RoomNotAvailableException(String message) {
+        super(message);
     }
+}
 
-    // Generate a summary report (Read-Only)
-    public void generateAdminReport() {
-        System.out.println("\n========== ADMIN STRATEGIC REPORT ==========");
-        System.out.println("Total Bookings Confirmed: " + history.size());
+// --- Validation Service ---
 
-        double totalRevenue = 0;
-        for (Reservation res : history) {
-            System.out.println(" -> " + res);
-            totalRevenue += res.getPrice();
+class BookingValidator {
+    private static final Set<String> VALID_ROOM_TYPES = Set.of("Single", "Double", "Suite");
+
+    public static void validateRequest(String roomType, int availability)
+            throws InvalidBookingException, RoomNotAvailableException {
+
+        // 1. Validate Input (Case Sensitive)
+        if (!VALID_ROOM_TYPES.contains(roomType)) {
+            throw new InvalidBookingException("Error: Invalid Room Type '" + roomType + "'.");
         }
 
-        System.out.println("--------------------------------------------");
-        System.out.println("Total Revenue Generated: $" + totalRevenue);
-        System.out.println("============================================\n");
-    }
-
-    // Getter for manual audit
-    public List<Reservation> getHistory() {
-        return Collections.unmodifiableList(history); // Defensive copy
+        // 2. Validate System State (Inventory Check)
+        if (availability <= 0) {
+            throw new RoomNotAvailableException("Error: No " + roomType + " rooms left in inventory.");
+        }
     }
 }
 
@@ -71,29 +47,39 @@ public class BookMyStayApp {
 
     public static void main(String[] args) {
         System.out.println("******************************************");
-        System.out.println("   Book My Stay App - History & Audit     ");
-        System.out.println("******************************************");
+        System.out.println("   Book My Stay App - Error Handling      ");
+        System.out.println("******************************************\n");
 
-        // 1. Initialize the History Service
-        BookingReportService reportService = new BookingReportService();
+        // Simple Mock Inventory
+        Map<String, Integer> inventory = new HashMap<>();
+        inventory.put("Single", 1);
+        inventory.put("Suite", 0); // Out of stock
 
-        // 2. Simulate successful bookings being recorded
-        // (In a full app, these would come from the BookingService after allocation)
-        System.out.println("[System] Recording confirmed bookings to history...");
+        // List of scenarios to test validation
+        String[] testRooms = {"Single", "Penthouse", "Suite", "single"}; // "single" is lowercase (invalid)
 
-        reportService.recordBooking(new Reservation("RES-101", "Sujal", "Single", 100.0));
-        reportService.recordBooking(new Reservation("RES-102", "Amit", "Suite", 350.0));
-        reportService.recordBooking(new Reservation("RES-103", "John", "Double", 180.0));
+        for (String room : testRooms) {
+            System.out.println("[Action] Attempting to book: " + room);
+            try {
+                // Fail-Fast: Validate before doing anything else
+                int count = inventory.getOrDefault(room, -1);
 
-        // 3. Admin requests the report
-        reportService.generateAdminReport();
+                BookingValidator.validateRequest(room, count);
 
-        // 4. Demonstrate manual verification
-        System.out.println("Audit Status: History sequence verified (FIFO).");
-        System.out.println("Latest Reservation ID: " +
-                reportService.getHistory().get(reportService.getHistory().size() - 1).getReservationId());
+                // If validation passes, proceed (Mocking the allocation)
+                inventory.put(room, count - 1);
+                System.out.println(" >> SUCCESS: Booking confirmed for " + room);
 
-        System.out.println("\nStatus: Persistence layer simulated. Ready for file/DB integration.");
+            } catch (InvalidBookingException | RoomNotAvailableException e) {
+                // Graceful Handling: Catch the error and print the message
+                System.err.println(" >> VALIDATION FAILED: " + e.getMessage());
+            } catch (Exception e) {
+                System.err.println(" >> SYSTEM ERROR: " + e.getMessage());
+            }
+            System.out.println("------------------------------------------");
+        }
+
+        System.out.println("\nStatus: Validation logic verified. System remains stable.");
         System.out.println("******************************************");
     }
 }
